@@ -33,7 +33,7 @@ class DeviceFlow
         $override = Env::get('VASK_API_URL');
         $configured = is_string($override) && $override !== '' ? $override : self::DEFAULT_API_URL;
 
-        return mb_rtrim($configured, '/');
+        return rtrim($configured, '/');
     }
 
     /**

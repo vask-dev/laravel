@@ -139,7 +139,7 @@ class EnvWriter
             return null;
         }
 
-        return self::unescape(mb_trim($matches[1]));
+        return self::unescape(trim($matches[1]));
     }
 
     protected static function escape(string $value): string

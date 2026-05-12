@@ -32,7 +32,7 @@ it('auto-registers the route after a handler is registered', function (): void {
     expect(Route::has(Vask::ROUTE_NAME))->toBeTrue();
 
     $route = Route::getRoutes()->getByName(Vask::ROUTE_NAME);
-    expect($route->uri())->toBe(mb_ltrim(Vask::DEFAULT_WEBHOOK_PATH, '/'));
+    expect($route->uri())->toBe(ltrim(Vask::DEFAULT_WEBHOOK_PATH, '/'));
     expect($route->methods())->toContain('POST');
 });
 

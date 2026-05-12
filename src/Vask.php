@@ -122,7 +122,7 @@ class Vask
             return $this->webhookPath;
         }
 
-        $this->webhookPath = '/'.mb_ltrim($path, '/');
+        $this->webhookPath = '/'.ltrim($path, '/');
 
         return $this;
     }
