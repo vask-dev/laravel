@@ -21,6 +21,8 @@ class VaskServiceProvider extends PackageServiceProvider
 
     public const DEMO_BROADCAST_ROUTE_NAME = 'vask.demo.broadcast';
 
+    public const DEMO_AUTH_ROUTE_NAME = 'vask.demo.auth';
+
     /**
      * Register the demo routes unconditionally. Public so tests can drive
      * route registration without needing to flip the app environment.
@@ -32,6 +34,9 @@ class VaskServiceProvider extends PackageServiceProvider
 
         Route::post(self::DEMO_PATH.'/broadcast', [VaskDemoController::class, 'broadcast'])
             ->name(self::DEMO_BROADCAST_ROUTE_NAME);
+
+        Route::post(self::DEMO_PATH.'/auth', [VaskDemoController::class, 'auth'])
+            ->name(self::DEMO_AUTH_ROUTE_NAME);
 
         Route::getRoutes()->refreshNameLookups();
     }

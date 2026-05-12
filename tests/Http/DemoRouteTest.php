@@ -112,3 +112,68 @@ it('treats VASK_NO_DEMO=false as "demo enabled"', function (): void {
         putenv('VASK_NO_DEMO');
     }
 });
+
+it('signs Pusher channel auth requests for the demo channel', function (): void {
+    VaskServiceProvider::registerDemoRoutes();
+
+    $response = $this->postJson(VaskServiceProvider::DEMO_PATH.'/auth', [
+        'socket_id' => '12345.67890',
+        'channel_name' => VaskDemoEvent::CHANNEL,
+    ]);
+
+    $response->assertOk();
+
+    $expectedSig = hash_hmac('sha256', '12345.67890:'.VaskDemoEvent::CHANNEL, 'test-secret');
+    $response->assertExactJson(['auth' => 'test-key:'.$expectedSig]);
+});
+
+it('refuses to sign auth requests for channels other than the demo channel', function (): void {
+    VaskServiceProvider::registerDemoRoutes();
+
+    $response = $this->postJson(VaskServiceProvider::DEMO_PATH.'/auth', [
+        'socket_id' => '12345.67890',
+        'channel_name' => 'private-some-other-channel',
+    ]);
+
+    $response->assertForbidden();
+});
+
+it('rejects malformed socket ids', function (): void {
+    VaskServiceProvider::registerDemoRoutes();
+
+    $response = $this->postJson(VaskServiceProvider::DEMO_PATH.'/auth', [
+        'socket_id' => 'not-a-socket-id; rm -rf',
+        'channel_name' => VaskDemoEvent::CHANNEL,
+    ]);
+
+    $response->assertForbidden();
+});
+
+it('rejects empty socket_id on auth', function (): void {
+    VaskServiceProvider::registerDemoRoutes();
+
+    $response = $this->postJson(VaskServiceProvider::DEMO_PATH.'/auth', [
+        'socket_id' => '',
+        'channel_name' => VaskDemoEvent::CHANNEL,
+    ]);
+
+    $response->assertForbidden();
+});
+
+it('returns 500 from the auth route when Vask credentials are not configured', function (): void {
+    config()->set('broadcasting.connections.pusher.key', '');
+    config()->set('broadcasting.connections.pusher.secret', '');
+
+    VaskServiceProvider::registerDemoRoutes();
+
+    $response = $this->postJson(VaskServiceProvider::DEMO_PATH.'/auth', [
+        'socket_id' => '12345.67890',
+        'channel_name' => VaskDemoEvent::CHANNEL,
+    ]);
+
+    $response->assertStatus(500);
+});
+
+it('uses the private channel prefix so client events are protocol-allowed', function (): void {
+    expect(VaskDemoEvent::CHANNEL)->toStartWith('private-');
+});

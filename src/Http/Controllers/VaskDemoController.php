@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Vask\Laravel\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Vask\Laravel\Broadcasting\VaskDemoEvent;
 
 class VaskDemoController
@@ -30,6 +32,7 @@ class VaskDemoController
             'cluster' => $cluster,
             'channel' => VaskDemoEvent::CHANNEL,
             'eventName' => VaskDemoEvent::NAME,
+            'clientEventName' => VaskDemoEvent::CLIENT_EVENT_NAME,
             'configured' => $key !== '' && $host !== '',
         ]);
     }
@@ -54,6 +57,34 @@ class VaskDemoController
         ));
 
         return new Response('', 204);
+    }
+
+    /**
+     * Pusher channel-auth endpoint for the private demo channel.
+     *
+     * Restricted to exactly VaskDemoEvent::CHANNEL — the route is local-only,
+     * but we still don't want it to behave as a general-purpose signer that
+     * could vouch for arbitrary private channels in the host app.
+     */
+    public function auth(Request $request): JsonResponse
+    {
+        $socketId = $this->stringInput($request, 'socket_id');
+        $channelName = $this->stringInput($request, 'channel_name');
+
+        throw_if($channelName !== VaskDemoEvent::CHANNEL, HttpException::class, 403, 'Demo auth route only signs '.VaskDemoEvent::CHANNEL.'.');
+
+        // Pusher socket IDs look like "12345.67890" — guard against weird
+        // input being concatenated into the signed string.
+        throw_if($socketId === '' || preg_match('/^\d+\.\d+$/', $socketId) !== 1, HttpException::class, 403, 'Invalid socket_id.');
+
+        $key = $this->configString('broadcasting.connections.pusher.key');
+        $secret = $this->configString('broadcasting.connections.pusher.secret');
+
+        throw_if($key === '' || $secret === '', HttpException::class, 500, 'Vask credentials are not configured. See `php artisan vask:doctor`.');
+
+        $signature = hash_hmac('sha256', $socketId.':'.$channelName, $secret);
+
+        return new JsonResponse(['auth' => $key.':'.$signature]);
     }
 
     protected function stringInput(Request $request, string $key): string

@@ -16,9 +16,14 @@ class VaskDemoEvent implements ShouldBroadcastNow
     use InteractsWithSockets;
     use SerializesModels;
 
-    public const CHANNEL = 'vask-demo';
+    // Private channel so the demo can also exercise pusher-js client events,
+    // which are protocol-forbidden on public channels. Auth signed by the
+    // local-only /_vask/demo/auth route.
+    public const CHANNEL = 'private-vask-demo';
 
     public const NAME = 'emoji';
+
+    public const CLIENT_EVENT_NAME = 'client-emoji';
 
     public function __construct(
         public string $emoji,
