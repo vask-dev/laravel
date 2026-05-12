@@ -31,6 +31,17 @@ php artisan vask:doctor
 php artisan vask:doctor --no-ping --no-broadcast   # skip the live network checks
 ```
 
+### Try it in the browser
+
+After `vask:install`, start your dev server and visit `/_vask/demo` — a
+local-only page that subscribes to a public channel and lets you click emoji to
+broadcast them. It exercises the full round-trip (Laravel → Vask → browser) and
+shows you the latency, so you can confirm both your server credentials and the
+WebSocket leg without writing a single line of frontend code.
+
+The demo route is only registered when `app()->environment() === 'local'`. To
+turn it off entirely, set `VASK_NO_DEMO=true` in your `.env`.
+
 ## Usage
 
 Vask is a drop-in Pusher replacement, so use Laravel's standard broadcasting:

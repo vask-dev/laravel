@@ -12,6 +12,7 @@ use Vask\Laravel\Support\BroadcastingDetector;
 use Vask\Laravel\Support\DeviceFlow;
 use Vask\Laravel\Support\DeviceFlowResult;
 use Vask\Laravel\Support\EnvWriter;
+use Vask\Laravel\VaskServiceProvider;
 
 class InstallCommand extends Command
 {
@@ -250,6 +251,8 @@ class InstallCommand extends Command
             $this->info(sprintf('  ✓ Added %d Vask placeholder key(s) to .env.example.', $exampleAdded));
         }
 
+        $this->showDemoHint();
+
         $this->newLine();
 
         if (! $this->option('no-doctor')) {
@@ -355,6 +358,23 @@ class InstallCommand extends Command
         }
 
         return $count;
+    }
+
+    /**
+     * Print a "Try it" hint pointing at the local-only demo route. We can't
+     * know the dev server port from a CLI command, so we show the path and
+     * let the user paste it after their `php artisan serve` URL.
+     */
+    protected function showDemoHint(): void
+    {
+        if (VaskServiceProvider::demoDisabledByEnv()) {
+            return;
+        }
+
+        $this->newLine();
+        $this->line('  <fg=cyan;options=bold>Try it out</>');
+        $this->line('  Start your dev server and visit <fg=green;options=bold>'.VaskServiceProvider::DEMO_PATH.'</> in your browser');
+        $this->line('  <fg=gray>(local environment only — set VASK_NO_DEMO=true to disable)</>');
     }
 
     /**
