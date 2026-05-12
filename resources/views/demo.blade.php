@@ -231,8 +231,27 @@
     channelAuthorization: { endpoint: cfg.authUrl, transport: 'ajax' },
   });
 
+  // Vask/Pusher error codes that we want to surface as a clean, one-line
+  // message instead of dumping the raw JSON. 4009 in particular fires for
+  // *every* client event the server rejects, so without suppression the log
+  // turns into wallpaper.
+  let clientEventsBlocked = false;
+  const $clientButtons = document.querySelectorAll('button[data-mode="client"]');
+
+  function blockClientEvents(reason) {
+    if (clientEventsBlocked) return;
+    clientEventsBlocked = true;
+    $clientButtons.forEach((b) => { b.disabled = true; b.title = reason; });
+    logLine('<span style="color:var(--bad)">client events disabled:</span> ' + escapeHtml(reason), false);
+  }
+
   pusher.connection.bind('state_change', (s) => setStatus(s.current));
   pusher.connection.bind('error', (err) => {
+    const code = (err && err.data && err.data.code) || (err && err.error && err.error.data && err.error.data.code);
+    if (code === 4009) {
+      blockClientEvents('Client events are not enabled for this Vask app — enable them in your Vask dashboard, then reload.');
+      return;
+    }
     logLine('<span style="color:var(--bad)">connection error:</span> ' + escapeHtml(JSON.stringify(err)), false);
   });
   setStatus(pusher.connection.state);
@@ -313,15 +332,20 @@
   }
 
   function sendClient(emoji) {
+    if (clientEventsBlocked) return;
     const payload = { emoji, x: Math.random(), senderId, sentAt: now() };
     // Render locally so the sender still sees their own emoji — Pusher
     // won't echo the client event back to us.
     floatEmoji(emoji, payload.x);
+    // trigger() returns true if the frame was sent over the wire — it does
+    // NOT mean the server accepted it. Rejection (e.g. client events
+    // disabled) comes back asynchronously via pusher.connection 'error' and
+    // is handled by blockClientEvents().
     const ok = ch.trigger(cfg.clientEventName, payload);
     if (ok) {
       logLine('<span class="mode-tag client">cli</span> ' + emoji + ' sent (no echo — open a second tab to see arrival)', true);
     } else {
-      logLine('<span style="color:var(--bad)">client event failed</span> — channel may not be subscribed yet, or client events are disabled for this app', false);
+      logLine('<span style="color:var(--bad)">client event failed</span> — channel may not be subscribed yet', false);
     }
   }
 
