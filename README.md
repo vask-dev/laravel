@@ -5,7 +5,7 @@
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/vask-dev/laravel/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/vask-dev/laravel/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/vask/laravel.svg?style=flat-square)](https://packagist.org/packages/vask/laravel)
 
-This is where your description should go. Limit it to a paragraph or two. Consider adding a small example.
+Drop-in Laravel integration for [Vask](https://vask.dev), Pusher-compatible WebSockets running on Cloudflare. Run `php artisan vask:install` to OAuth into your account, write `PUSHER_*` credentials to `.env`, and verify the connection in one go. The package also ships a webhook handler for channel, presence, and client events, a `vask:doctor` diagnostic command, and a local-only `/_vask/demo` page that proves the round-trip end-to-end.
 
 ## Installation
 
@@ -19,7 +19,7 @@ Sign up (or sign in) and wire credentials into `.env` in one command:
 php artisan vask:install
 ```
 
-This kicks off an OAuth device flow — you'll be shown a URL and a short code
+This kicks off an OAuth device flow. You'll be shown a URL and a short code
 to approve in your browser. Once approved, the command writes
 `PUSHER_*` credentials to `.env` and runs `vask:doctor` to confirm the
 configuration. No git config or local tokens are used to authenticate.
@@ -33,11 +33,12 @@ php artisan vask:doctor --no-ping --no-broadcast   # skip the live network check
 
 ### Try it in the browser
 
-After `vask:install`, start your dev server and visit `/_vask/demo` — a
-local-only page that subscribes to a public channel and lets you click emoji to
-broadcast them. It exercises the full round-trip (Laravel → Vask → browser) and
-shows you the latency, so you can confirm both your server credentials and the
-WebSocket leg without writing a single line of frontend code.
+After `vask:install`, start your dev server and visit `/_vask/demo`. It's a
+local-only page that subscribes to a private channel and lets you click emoji to
+broadcast them, both via the server (POST to Laravel) and as Pusher client events
+straight from the browser. It exercises the full round-trip (Laravel to Vask to
+browser) and shows you the latency, so you can confirm both your server
+credentials and the WebSocket leg without writing a single line of frontend code.
 
 The demo route is only registered when `app()->environment() === 'local'`. To
 turn it off entirely, set `VASK_NO_DEMO=true` in your `.env`.
@@ -61,8 +62,8 @@ class OrderShipped implements ShouldBroadcast
 
 ### Webhooks
 
-Register handlers in a service provider — the package auto-registers
-`POST /webhooks/vask` the first time it sees a handler. No handler = no route:
+Register handlers in a service provider. The package auto-registers
+`POST /webhooks/vask` the first time it sees a handler. No handler, no route:
 
 ```php
 use Vask\Laravel\Facades\Vask;
