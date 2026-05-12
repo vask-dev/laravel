@@ -2,6 +2,19 @@
 
 All notable changes to `vask/laravel` will be documented in this file.
 
+## 0.0.16 - 2026-05-12
+
+### What's Changed
+
+Both CI failures from `0.0.15` actually fixed this time:
+
+* **`run-tests`** was still picking `orchestra/testbench-core v9.0.1` (the buggy floor) on prefer-lowest because the workflow's `composer require "orchestra/testbench:9.*"` overrode the `composer.json` `^9.5` floor I'd bumped. Pinned the matrix constraints themselves to `^8.22` / `^9.5` / `^10.0`.
+  
+* **PHPStan** was failing because larastan's view-string rule can't resolve the package's `vask::demo` view namespace without booting a Laravel app. The view is registered via `hasViews()` and the file exists; the rule just can't see it statically. Suppressed this specific false positive in `phpstan.neon.dist` with `reportUnmatchedIgnoredErrors: false` so the suppression only fires where it's actually needed.
+  
+
+**Full Changelog**: https://github.com/vask-dev/laravel/compare/0.0.15...0.0.16
+
 ## 0.0.15 - 2026-05-12
 
 ### What's Changed
