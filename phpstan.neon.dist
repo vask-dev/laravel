@@ -1,0 +1,20 @@
+includes:
+    - phpstan-baseline.neon
+    # larastan + phpstan-deprecation-rules + phpstan-phpunit are auto-loaded
+    # by phpstan/extension-installer; including them here causes a "loaded
+    # multiple times" warning.
+    - vendor/phpstan/phpstan/conf/bleedingEdge.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+    # Typed class constants are PHP 8.3+; we support PHP 8.1+, so disable
+    # constant-type coverage. Everything else (return / param / property) is
+    # required at 100%.
+    type_coverage:
+        return_type: 100
+        param_type: 100
+        property_type: 100
+        constant_type: 0
+    tmpDir: build/phpstan
