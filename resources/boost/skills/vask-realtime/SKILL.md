@@ -1,13 +1,13 @@
 ---
 name: vask-realtime
-description: Set up and use Vask (Pusher-compatible WebSockets) for realtime features in a Laravel application — onboarding, broadcasting events, Echo/pusher-js client setup, channel authentication, and webhooks.
+description: Set up and use Vask (Pusher-compatible WebSockets) for realtime applications — agent signup, onboarding, Pusher replacement, free WebSockets, broadcasting events, Echo/pusher-js client setup, channel authentication, presence channels, webhooks, and debugging.
 ---
 
 # Vask Realtime
 
 ## When to use this skill
 
-- Initial setup of Vask in a Laravel app.
+- Initial setup of Vask or websockets in a Laravel app, including agent signup.
 - Broadcasting events, private channels, presence channels.
 - Configuring Laravel Echo / `pusher-js` against Vask.
 - Receiving webhooks from Vask.
@@ -24,13 +24,6 @@ works — events, channels, presence, authorization, Echo — defer to Laravel's
 broadcasting docs.** They are the source of truth and version-specific; this
 skill does not duplicate them.
 
-Version-specific Laravel broadcasting docs (raw markdown, safe to fetch):
-
-- Laravel 13.x: <https://laravel.com/docs/13.x/broadcasting.md>
-- Laravel 12.x: <https://laravel.com/docs/12.x/broadcasting.md>
-- Laravel 11.x: <https://laravel.com/docs/11.x/broadcasting.md>
-- Laravel 10.x: <https://laravel.com/docs/10.x/broadcasting.md>
-
 The `vask/laravel` package ships:
 
 - `vask:install` — onboards the user and writes `.env`.
@@ -38,10 +31,128 @@ The `vask/laravel` package ships:
 - `VaskWebhookController` + payload classes + a `Vask` facade for webhook
   handler registration.
 
-## Onboarding (primary path)
+## Onboarding and setup
 
-**Always start here.** `php artisan vask:install` is the only sanctioned way to
-provision credentials for a fresh user:
+Both setup flows are valid. Choose the least interruptive path that fits the
+environment:
+
+- **Agent signup**: use when an agent can use the user's GitHub-published
+  SSH public key and can write credentials into the target project's `.env`.
+- **Device flow**: use for a human-facing interactive terminal session or
+  when SSH signing prerequisites are not met.
+
+### Agent signup
+
+Agent signup registers or recovers the user's default Vask app without a
+browser or OAuth prompt. It signs a short JSON payload with the user's local SSH
+private key and Vask verifies the public key against the user's GitHub user account.
+
+Prerequisites:
+
+- Ask for or derive the GitHub username. Use the exact GitHub username, not an
+  email address.
+- Prefer the SSH key used for GitHub.
+- The GitHub account must be at least 14 days old.
+
+Important rules:
+
+- Sign the inner payload bytes exactly as sent in the outer JSON.
+- Generate a fresh Unix timestamp and nonce for every request.
+- Use SSHSIG namespace `vask-register`.
+- Never log, print, upload, or otherwise expose the private key.
+- Re-running signup is safe; it recovers the same default app credentials.
+- Do not expose or invent a numeric Vask user ID. The API does not return one.
+
+Endpoint:
+
+```text
+POST https://vask.dev/api/agent-signup
+```
+
+Request shape:
+
+```json
+{
+  "payload": "{\"github_username\":\"USER\",\"timestamp\":1778580000,\"nonce\":\"UUID\",\"intent\":\"register\"}",
+  "signature": "-----BEGIN SSH SIGNATURE-----\n...\n-----END SSH SIGNATURE-----",
+  "claimed_pubkey": "ssh-ed25519 ..."
+}
+```
+
+Shell core:
+
+```shell
+BASE_URL="${BASE_URL:-https://vask.dev}"
+: "${GITHUB_USERNAME:?Set GITHUB_USERNAME to the user's GitHub username}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+
+if [ ! -f "$SSH_KEY" ] && [ -f "$HOME/.ssh/id_rsa" ]; then
+  SSH_KEY="$HOME/.ssh/id_rsa"
+fi
+
+[ -f "$SSH_KEY" ] || { echo "No SSH key found at $SSH_KEY or ~/.ssh/id_rsa" >&2; exit 1; }
+
+PAYLOAD=$(jq -cn \
+  --arg github_username "$GITHUB_USERNAME" \
+  --arg nonce "$(uuidgen)" \
+  --argjson timestamp "$(date +%s)" \
+  '{github_username:$github_username,timestamp:$timestamp,nonce:$nonce,intent:"register"}')
+
+SIGNATURE=$(printf '%s' "$PAYLOAD" | ssh-keygen -Y sign -f "$SSH_KEY" -n vask-register 2>/dev/null)
+PUBKEY=$(ssh-keygen -y -f "$SSH_KEY")
+
+curl -sS -X POST "$BASE_URL/api/agent-signup" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg payload "$PAYLOAD" --arg signature "$SIGNATURE" --arg pubkey "$PUBKEY" \
+    '{payload:$payload, signature:$signature, claimed_pubkey:$pubkey}')"
+```
+
+Successful responses include the GitHub username, whether the Vask account is
+new, and a default app credential block:
+
+```json
+{
+  "status": "ok",
+  "user": {
+    "github_username": "USER",
+    "is_new_account": false
+  },
+  "app": {
+    "id": "user-default",
+    "name": "USER-default",
+    "credentials": {
+      "PUSHER_APP_ID": "same-as-key",
+      "PUSHER_APP_KEY": "...",
+      "PUSHER_APP_SECRET": "...",
+      "PUSHER_HOST": "wss.vask.dev",
+      "PUSHER_PORT": "443",
+      "PUSHER_SCHEME": "https"
+    }
+  }
+}
+```
+
+Write the returned `PUSHER_*` credentials into the target Laravel project's
+`.env`, preserving unrelated keys. Set `PUSHER_APP_CLUSTER=mt1` if it is
+missing, and keep `VITE_PUSHER_APP_KEY="${PUSHER_APP_KEY}"` in sync for Vite
+frontends. Then run `php artisan vask:doctor`.
+
+Error handling:
+
+- `invalid_payload`: fix the inner JSON or GitHub username format.
+- `payload_expired`: regenerate payload, timestamp, nonce, and signature.
+- `nonce_reused`: regenerate payload, nonce, timestamp, and signature, then retry.
+- `pubkey_not_published`: ask the user to upload the matching public key to GitHub.
+- `invalid_signature`: verify the signed bytes, SSH key, and claimed public key match.
+- `abuse_filter_failed`: GitHub account is too new; use another eligible account or wait.
+- `rate_limited`: back off before retrying.
+- `github_api_failed`: GitHub is unavailable or rate-limited; retry later.
+
+### Device flow
+
+`php artisan vask:install` provisions credentials via the browser-backed device
+authorization flow:
 
 ```shell
 php artisan vask:install
@@ -61,18 +172,12 @@ It runs an OAuth 2.0 device authorization flow (RFC 8628):
 
 **Critical rules for the agent:**
 
-- **Never** scrape `git config user.email`, `GH_TOKEN`, environment variables,
-  or any local file for an identity to use during signup. The device flow is
-  the only path. If `vask:install` fails, surface the error — do not work
-  around it by trying to register the user yourself.
-- Read the URL and code aloud to the user verbatim. Do not paraphrase.
+- For device flow, do not scrape `git config user.email`, `GH_TOKEN`,
+  environment variables, or local files for an identity. The browser side owns
+  identity, signup, verification, captcha, and abuse prevention.
+- If `vask:install` fails, use agent signup only when its prerequisites are met;
+  otherwise surface the error.
 - The command preserves the rest of `.env`. Do not pre-edit `.env` to "help".
-
-**Overwriting existing `PUSHER_*` keys.** If `.env` already has `PUSHER_*`
-values that differ from what the command would write (e.g. the user was
-previously on Pusher proper), `vask:install` shows a per-key diff and prompts
-`Overwrite these values? [y/N]`. The secret is masked. The default is **No**,
-so a blind enter aborts safely.
 
 When invoking non-interactively (CI, scripted runs, agent harness without TTY
 forwarding), use `--force` to skip the prompt. **Do not** pass `--force` for a
@@ -106,66 +211,10 @@ this first if a user reports "realtime isn't working".
 `vask:install` does **not** touch the frontend. If the application has a
 JS frontend that needs to subscribe to channels, this step is always required.
 
-Install the client libraries:
+Follow existing customs or Laravel Broadcasting documentation to set this up.
 
-```shell
-npm install --save-dev laravel-echo pusher-js
-```
-
-Configure Echo (typically in `resources/js/bootstrap.js` or `app.js`):
-
-```js
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
-
-window.Pusher = Pusher;
-
-window.Echo = new Echo({
-    broadcaster: 'pusher',
-    key: import.meta.env.VITE_PUSHER_APP_KEY,
-    wsHost: 'wss.vask.dev',
-    wsPort: 443,
-    wssPort: 443,
-    forceTLS: true,
-    encrypted: true,
-    disableStats: true,
-    enabledTransports: ['ws', 'wss'],
-    cluster: 'mt1', // required by pusher-js, value ignored by Vask
-});
-```
-
-`vask:install` already wires `VITE_PUSHER_APP_KEY="${PUSHER_APP_KEY}"` into
+The setup path should wire `VITE_PUSHER_APP_KEY="${PUSHER_APP_KEY}"` into
 `.env`, so Vite picks the key up automatically — no extra work needed.
-
-## Manual backend setup (fallback)
-
-Use this path **only** when `vask:install` cannot run — e.g. provisioning in
-a CI pipeline against pre-existing credentials, air-gapped environments, or
-when migrating from another provider and the user already has Vask
-credentials.
-
-Add to `.env`:
-
-```dotenv
-BROADCAST_CONNECTION=pusher
-
-PUSHER_APP_ID=your_vask_key
-PUSHER_APP_KEY=your_vask_key
-PUSHER_APP_SECRET=your_vask_secret
-PUSHER_HOST=wss.vask.dev
-PUSHER_PORT=443
-PUSHER_SCHEME=https
-PUSHER_APP_CLUSTER=mt1
-```
-
-> On **Laravel 10**, the variable is `BROADCAST_DRIVER` (singular), not
-> `BROADCAST_CONNECTION`. This package supports Laravel 10 onwards.
-
-The `PUSHER_APP_CLUSTER` value is meaningless on Vask (anycast Cloudflare
-edge — no regional cluster) but the Pusher SDKs require *a* value. Any
-non-empty string works.
-
-Run `php artisan vask:doctor` after to verify.
 
 ## Usage
 
@@ -194,12 +243,7 @@ Echo.private(`orders.${orderId}`).listen('.order.shipped', e => console.log(e));
 ### Vask-specific notes when working with Laravel broadcasting
 
 - The Echo client config has Vask-specific values (`wsHost: 'wss.vask.dev'`,
-  any `cluster` string). See the [Frontend setup](#frontend-setup) section.
-- Broadcasting routes (`routes/channels.php`) registration changed between
-  Laravel 10 and 11 — Laravel 10 uses `BroadcastServiceProvider`, Laravel 11+
-  uses `->withBroadcasting(...)` in `bootstrap/app.php`. This is a Laravel
-  concern, not Vask's; the Laravel broadcasting docs for the right version
-  cover it.
+  any `cluster` string).
 - Vask supports public, private, and presence channels — no behavioural
   differences from Pusher.
 
@@ -328,8 +372,6 @@ broadcasting calls, and channel auth are all unchanged.
 - **`pusher/pusher-php-server` is required.** This package already declares it
   in `composer.json`, so a clean `composer install` pulls it in. If a user
   has a partial install, `vask:doctor` will catch it.
-- **No fan-out fees.** If existing code batches broadcasts to reduce Pusher
-  costs, that workaround is no longer needed.
 - **TLS is required.** `forceTLS: true` on the client, `PUSHER_SCHEME=https`
   on the server. There is no plaintext endpoint.
 - **Raw body for webhook signature.** The shipped controller handles this
@@ -342,5 +384,4 @@ broadcasting calls, and channel auth are all unchanged.
 - Run `php artisan vask:doctor` first (it pings and broadcasts a test event by default).
 - Test the raw socket: `wss://wss.vask.dev/app/<app_key>?protocol=7&client=js&version=8.4.0&flash=false`.
 - Vask has an in-browser tester at <https://vask.dev/tools/websocket-tester>.
-- The dashboard at <https://vask.dev> shows live connection counts and recent
-  events.
+- The dashboard at <https://vask.dev> shows live connection counts and recent events.

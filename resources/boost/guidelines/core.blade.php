@@ -6,8 +6,10 @@ stack and provides:
 
 - `vask:install` — OAuth device-flow command that signs up / signs in the
   user on vask.dev and writes `PUSHER_*` credentials to `.env`. **The
-  preferred path for fresh installs.** Never scrape the user's git config or
-  ambient env vars to register them; always run this command.
+  preferred path for human-facing fresh installs.** For autonomous agent-led
+  setup, use the `vask-realtime` skill's SSH-signed agent signup flow. Never
+  scrape the user's git config or ambient env vars to register them, never ask
+  for passwords/tokens/captcha answers, and never invent credentials.
 - `vask:doctor` — validates configuration end-to-end.
 - `Vask\Laravel\Http\Controllers\VaskWebhookController` — drop-in webhook
   controller that verifies signatures and dispatches events to handlers
@@ -22,20 +24,10 @@ Vask-specific APIs; do not duplicate Laravel's broadcasting docs.
 
 ### Key facts for code generation
 
-- **Use the `pusher` broadcast driver.** Vask speaks the Pusher protocol — keep
-  `BROADCAST_CONNECTION=pusher` (or `BROADCAST_DRIVER=pusher` on Laravel 10).
-  Do **not** suggest installing Reverb, Soketi, Ably, or `pusher/pusher-php-server`
-  alternatives.
-- **Host is `wss.vask.dev`** (port `443`, scheme `https`). Override `PUSHER_HOST`
-  with this value.
-- **No cluster.** Vask is anycast at the edge — the Pusher cluster setting is
-  ignored. The Pusher PHP SDK and `pusher-js` both require *some* value, so any
-  string works (e.g. `mt1`). Don't generate code that picks a cluster based on
-  region.
-- **One broadcast = one message.** Vask doesn't charge per-subscriber fan-out, so
-  there's no reason to batch or debounce events for cost reasons.
-- **Credentials** (`app_key`, `app_secret`, `app_id`) come from the user's app at
-  vask.dev/onboarding. The `app_key` doubles as the `app_id`.
+- **Use the `pusher` broadcast driver.** Vask speaks the Pusher protocol — keep `BROADCAST_CONNECTION=pusher` (or `BROADCAST_DRIVER=pusher` on Laravel 10).
+- **Host is `wss.vask.dev`** (port `443`, scheme `https`). Override `PUSHER_HOST` with this value.
+- **No cluster.** Vask is anycast at the edge — the Pusher cluster setting is ignored. The Pusher PHP SDK and `pusher-js` both require *some* value, so any string works (e.g. `vask`). Don't generate code that picks a cluster based on region.
+- **Credentials** (`app_key`, `app_secret`, `app_id`) come from the user's app at vask.dev or the SSH-signed `/api/agent-signup` flow in the `vask-realtime` skill. The `app_key` doubles as the `app_id`.
 
 ### Required `.env`
 
@@ -49,7 +41,7 @@ PUSHER_APP_SECRET=your_vask_secret
 PUSHER_HOST=wss.vask.dev
 PUSHER_PORT=443
 PUSHER_SCHEME=https
-PUSHER_APP_CLUSTER=mt1
+PUSHER_APP_CLUSTER=vask
 </code-snippet>
 @endverbatim
 
@@ -57,12 +49,7 @@ PUSHER_APP_CLUSTER=mt1
 
 Broadcast events with Laravel's normal `ShouldBroadcast` contract. **There is
 no Vask broadcasting API** — every broadcasting feature is documented in
-Laravel's docs:
-
-- Laravel 13.x: <https://laravel.com/docs/13.x/broadcasting.md>
-- Laravel 12.x: <https://laravel.com/docs/12.x/broadcasting.md>
-- Laravel 11.x: <https://laravel.com/docs/11.x/broadcasting.md>
-- Laravel 10.x: <https://laravel.com/docs/10.x/broadcasting.md>
+Laravel's docs.
 
 ### Webhooks
 
@@ -70,8 +57,7 @@ Vask supports Pusher-compatible webhooks for server-side reactions to realtime
 activity. Five event types: `channel_occupied`, `channel_vacated`,
 `member_added`, `member_removed`, `client_event` (private/presence channels only).
 
-**Do not write a custom webhook controller and do not register a route
-yourself** — the package ships a controller AND auto-registers
+This package ships a controller AND auto-registers
 `POST /webhooks/vask` (named `vask.webhook`) the first time a handler is
 registered. No handler = no route, no overhead. The route lives outside the
 `web` middleware group so CSRF is not an issue.
