@@ -2,6 +2,16 @@
 
 All notable changes to `vask/laravel` will be documented in this file.
 
+## 0.0.13 - 2026-05-12
+
+### What's Changed
+
+Documentation refresh. Replaces the leftover spatie/skeleton placeholder description with a real one, mentions the server/client split in the `/_vask/demo` page, and tidies the prose.
+
+No functional or API changes.
+
+**Full Changelog**: https://github.com/vask-dev/laravel/compare/0.0.12...0.0.13
+
 ## 0.0.12 - 2026-05-12
 
 ### What's Changed
