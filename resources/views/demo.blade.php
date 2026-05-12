@@ -46,6 +46,9 @@
   .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
   .stat .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
   .stat .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; margin-top: 2px; }
+  .stat .sublabel { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+  .hint strong { color: var(--fg); font-weight: 500; }
   .log { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; max-height: 200px; overflow: auto; background: #0a0c0f; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
   .log .line { padding: 1px 0; color: var(--muted); }
   .log .line.me { color: var(--fg); }
@@ -79,9 +82,26 @@
       @endforeach
     </div>
     <div class="stats">
-      <div class="stat"><div class="label">Last round-trip</div><div class="value" id="last-rt">—</div></div>
-      <div class="stat"><div class="label">Avg (mine, last 10)</div><div class="value" id="avg-rt">—</div></div>
-      <div class="stat"><div class="label">Received</div><div class="value" id="count">0</div></div>
+      <div class="stat">
+        <div class="label">WS receive</div>
+        <div class="value" id="last-rt">—</div>
+        <div class="sublabel" id="avg-rt">avg —</div>
+      </div>
+      <div class="stat">
+        <div class="label">POST round-trip</div>
+        <div class="value" id="last-post">—</div>
+        <div class="sublabel" id="avg-post">avg —</div>
+      </div>
+      <div class="stat">
+        <div class="label">Received</div>
+        <div class="value" id="count">0</div>
+        <div class="sublabel">events</div>
+      </div>
+    </div>
+    <div class="hint">
+      <strong>WS receive</strong> = click → message arrived over WebSocket.
+      <strong>POST</strong> = click → Laravel returned 204 (includes its synchronous call to Vask's HTTP API).
+      If WS &lt; POST, Vask is faster than your server's outbound call.
     </div>
   </div>
 
@@ -111,12 +131,34 @@
   const $dot = document.getElementById('dot');
   const $log = document.getElementById('log');
   const $count = document.getElementById('count');
-  const $last = document.getElementById('last-rt');
-  const $avg = document.getElementById('avg-rt');
+  const $lastRt = document.getElementById('last-rt');
+  const $avgRt = document.getElementById('avg-rt');
+  const $lastPost = document.getElementById('last-post');
+  const $avgPost = document.getElementById('avg-post');
   const $stage = document.getElementById('stage');
 
-  const myLatencies = [];
+  // sentAt (float, performance.now() when fetch started) is the correlation
+  // key between a click and the broadcast we get back over the WebSocket.
+  // We stash the POST round-trip per click keyed by sentAt so when the WS
+  // message arrives we can show both legs side-by-side.
+  const postTimes = new Map();
+  const rtLatencies = [];
+  const postLatencies = [];
   let received = 0;
+
+  function rollingAvg(arr) {
+    if (arr.length === 0) return null;
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+
+  function pushLat(arr, value) {
+    arr.push(value);
+    if (arr.length > 10) arr.shift();
+  }
+
+  function fmt(ms) {
+    return ms.toFixed(0) + ' ms';
+  }
 
   function setStatus(state) {
     $status.textContent = state;
@@ -172,12 +214,14 @@
     const mine = data.senderId === senderId;
     if (mine && typeof data.sentAt === 'number') {
       const rt = performance.now() - data.sentAt;
-      $last.textContent = rt.toFixed(0) + ' ms';
-      myLatencies.push(rt);
-      if (myLatencies.length > 10) myLatencies.shift();
-      const avg = myLatencies.reduce((a, b) => a + b, 0) / myLatencies.length;
-      $avg.textContent = avg.toFixed(0) + ' ms';
-      logLine(data.emoji + ' &nbsp; <span class="lat">' + rt.toFixed(0) + ' ms</span> round-trip', true);
+      $lastRt.textContent = fmt(rt);
+      pushLat(rtLatencies, rt);
+      $avgRt.textContent = 'avg ' + fmt(rollingAvg(rtLatencies));
+
+      // POST time may not be known yet (WS can arrive before fetch resolves).
+      const postT = postTimes.get(data.sentAt);
+      const postStr = postT !== undefined ? ' &nbsp; POST <span class="lat">' + fmt(postT) + '</span>' : '';
+      logLine(data.emoji + ' &nbsp; WS <span class="lat">' + fmt(rt) + '</span>' + postStr, true);
     } else {
       logLine(data.emoji + ' from <code>' + escapeHtml(String(data.senderId || '?')) + '</code>', false);
     }
@@ -187,11 +231,12 @@
     const btn = e.target.closest('button[data-emoji]');
     if (!btn) return;
     const emoji = btn.dataset.emoji;
+    const t0 = performance.now();
     const payload = {
       emoji,
       x: Math.random(),
       senderId,
-      sentAt: performance.now(),
+      sentAt: t0,
     };
     try {
       const res = await fetch(cfg.broadcastUrl, {
@@ -199,6 +244,16 @@
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(payload),
       });
+      const postRt = performance.now() - t0;
+      postTimes.set(t0, postRt);
+      // Bound the map so a long-running tab doesn't leak.
+      if (postTimes.size > 200) {
+        const firstKey = postTimes.keys().next().value;
+        postTimes.delete(firstKey);
+      }
+      $lastPost.textContent = fmt(postRt);
+      pushLat(postLatencies, postRt);
+      $avgPost.textContent = 'avg ' + fmt(rollingAvg(postLatencies));
       if (!res.ok) {
         logLine('<span style="color:var(--bad)">POST failed:</span> ' + res.status + ' ' + res.statusText, false);
       }
