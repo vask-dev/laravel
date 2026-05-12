@@ -192,7 +192,7 @@ class DoctorCommand extends Command
         if (is_int($value)) {
             return $value;
         }
-        if (is_string($value) && (ctype_digit($value) || (str_starts_with($value, '-') && ctype_digit(substr($value, 1))))) {
+        if (is_string($value) && (ctype_digit($value) || (str_starts_with($value, '-') && ctype_digit(mb_substr($value, 1))))) {
             return (int) $value;
         }
 
