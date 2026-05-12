@@ -9,6 +9,21 @@ parameters:
     level: max
     paths:
         - src
+    # The view-string ignore below only matches in CI (different larastan
+    # context), so locally the pattern won't be triggered. Don't fail the
+    # build on unmatched ignores; without this, local phpstan errors out
+    # complaining the ignore was unused.
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        # Larastan's view-string rule cannot resolve our package's view
+        # namespace ('vask::') without a booted Laravel app. The view IS
+        # registered via Spatie's hasViews() and exists at
+        # resources/views/demo.blade.php — this is a false positive that
+        # only surfaces in CI's environment.
+        -
+            message: "#^Parameter \\#1 \\$view of function view expects view-string\\|null, string given\\.$#"
+            path: src/Http/Controllers/VaskDemoController.php
+            count: 1
     # Typed class constants are PHP 8.3+; we support PHP 8.1+, so disable
     # constant-type coverage. Everything else (return / param / property) is
     # required at 100%.
