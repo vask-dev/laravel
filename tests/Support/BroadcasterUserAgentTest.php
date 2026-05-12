@@ -19,18 +19,20 @@ it('sets the User-Agent on the Pusher Guzzle client_options at boot time', funct
 
     expect($ua)
         ->toBeString()
-        ->toStartWith('vask-web/local vask-laravel');
+        ->toBe('vask-web/local');
     expect($ua)->toBe(UserAgent::build());
 });
 
 it('writes the UA on a fresh provider boot when nothing has been set yet', function (): void {
-    // Verify the boot-time write actually happened — the provider runs
-    // before any test code, so the slot should already be populated.
+    // The provider runs before any test code, so the slot should already
+    // be populated. The default APP_NAME is "Laravel" so we fall through
+    // to the project folder name (basename of base_path).
     $ua = config('broadcasting.connections.pusher.client_options.headers.User-Agent');
+    $expectedSlug = Illuminate\Support\Str::slug(basename(base_path()));
 
     expect($ua)
         ->toBeString()
-        ->toStartWith('laravel/testing vask-laravel');
+        ->toBe($expectedSlug.'/testing');
 });
 
 it('does not clobber a User-Agent the host app already set', function (): void {

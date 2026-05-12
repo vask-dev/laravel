@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 use Vask\Laravel\Support\UserAgent;
 
-it('builds a UA in the form "{slug}/{env} vask-laravel[/version]"', function (): void {
+it('builds a UA in the form "{slug}/{env}"', function (): void {
     config()->set('app.name', 'Vask Web');
     app()['env'] = 'local';
 
-    $ua = UserAgent::build();
-
-    expect($ua)->toStartWith('vask-web/local vask-laravel');
+    expect(UserAgent::build())->toBe('vask-web/local');
 });
 
-it('slugifies the app name', function (string $appName, string $expectedPrefix): void {
+it('slugifies the app name', function (string $appName, string $expected): void {
     config()->set('app.name', $appName);
     app()['env'] = 'local';
 
-    expect(UserAgent::build())->toStartWith($expectedPrefix);
+    expect(UserAgent::build())->toBe($expected);
 })->with([
     ['Vask Web', 'vask-web/local'],
     ['My Cool App!!', 'my-cool-app/local'],
@@ -33,7 +31,7 @@ it('falls back to the project folder name when app.name is the Laravel default',
 
     $expectedSlug = Illuminate\Support\Str::slug(basename(base_path()));
 
-    expect(UserAgent::build())->toStartWith($expectedSlug.'/local');
+    expect(UserAgent::build())->toBe($expectedSlug.'/local');
 });
 
 it('falls back to the project folder name when app.name is empty', function (): void {
@@ -42,7 +40,7 @@ it('falls back to the project folder name when app.name is empty', function (): 
 
     $expectedSlug = Illuminate\Support\Str::slug(basename(base_path()));
 
-    expect(UserAgent::build())->toStartWith($expectedSlug.'/local');
+    expect(UserAgent::build())->toBe($expectedSlug.'/local');
 });
 
 it('falls back to the project folder name when app.name slugifies to nothing', function (): void {
@@ -51,19 +49,21 @@ it('falls back to the project folder name when app.name slugifies to nothing', f
 
     $expectedSlug = Illuminate\Support\Str::slug(basename(base_path()));
 
-    expect(UserAgent::build())->toStartWith($expectedSlug.'/local');
+    expect(UserAgent::build())->toBe($expectedSlug.'/local');
 });
 
 it('slugifies the environment too so weird env names do not break the UA', function (): void {
     config()->set('app.name', 'My App');
     app()['env'] = 'Production CI';
 
-    expect(UserAgent::build())->toStartWith('my-app/production-ci');
+    expect(UserAgent::build())->toBe('my-app/production-ci');
 });
 
-it('includes the vask-laravel package version when Composer reports one', function (): void {
-    // The composer InstalledVersions registry is populated for any package
-    // installed via composer, including this one when tests run. We only
-    // assert the prefix shape — the literal version moves with each tag.
-    expect(UserAgent::build())->toMatch('#vask-laravel/[\w\.\-]+$#');
+it('does not append a package name or version', function (): void {
+    config()->set('app.name', 'Whatever');
+    app()['env'] = 'local';
+
+    expect(UserAgent::build())
+        ->not->toContain('vask-laravel')
+        ->not->toContain(' ');
 });

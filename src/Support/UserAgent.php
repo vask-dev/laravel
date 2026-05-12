@@ -4,27 +4,22 @@ declare(strict_types=1);
 
 namespace Vask\Laravel\Support;
 
-use Composer\InstalledVersions;
 use Illuminate\Support\Str;
-use Throwable;
 
 /**
  * Builds the User-Agent string sent on every outbound HTTP call this
- * package makes — the device-flow exchanges during `vask:install`, and
+ * package makes: the device-flow exchanges during `vask:install`, and
  * (when wired up by the service provider) the Pusher API calls every
  * `broadcast()` triggers at runtime.
  *
- * Format: "{app-name-slug}/{env} vask-laravel/{version}"
- *   e.g.  "vask-web/local vask-laravel/0.0.12"
+ * Format: "{app-name-slug}/{env}", e.g. "vask-web/local".
  *
- * The slug lets the server identify which Laravel app a request is
- * coming from at a glance; the package tag lets the server distinguish
- * vask-laravel traffic from generic Pusher SDK traffic.
+ * Kept deliberately minimal so operators can identify which calling
+ * app is talking to the server at a glance, without noisy package
+ * metadata.
  */
 class UserAgent
 {
-    public const PACKAGE_NAME = 'vask/laravel';
-
     public const FALLBACK_APP_SLUG = 'laravel';
 
     public const FALLBACK_ENVIRONMENT = 'production';
@@ -33,17 +28,7 @@ class UserAgent
 
     public static function build(): string
     {
-        $slug = self::appSlug();
-        $env = self::environment();
-        $version = self::packageVersion();
-
-        $ua = $slug.'/'.$env.' vask-laravel';
-
-        if ($version !== null) {
-            $ua .= '/'.$version;
-        }
-
-        return $ua;
+        return self::appSlug().'/'.self::environment();
     }
 
     protected static function appSlug(): string
@@ -51,7 +36,7 @@ class UserAgent
         $rawName = config('app.name');
 
         if (is_string($rawName)
-            && mb_trim($rawName) !== ''
+            && trim($rawName) !== ''
             && $rawName !== self::LARAVEL_DEFAULT_APP_NAME
         ) {
             $slug = Str::slug($rawName);
@@ -60,9 +45,9 @@ class UserAgent
             }
         }
 
-        // APP_NAME is still the Laravel default (or missing) — fall back to
-        // the project folder name. Most apps never customise APP_NAME, so
-        // basename(base_path()) is far more identifying for server-side
+        // APP_NAME is still the Laravel default (or missing) so fall back
+        // to the project folder name. Most apps never customise APP_NAME,
+        // so basename(base_path()) is far more identifying for server-side
         // observability than the literal string "laravel".
         $folderSlug = Str::slug(basename(base_path()));
 
@@ -81,20 +66,5 @@ class UserAgent
         $slug = Str::slug($env);
 
         return $slug === '' ? self::FALLBACK_ENVIRONMENT : $slug;
-    }
-
-    protected static function packageVersion(): ?string
-    {
-        if (! class_exists(InstalledVersions::class)) {
-            return null;
-        }
-
-        try {
-            $version = InstalledVersions::getPrettyVersion(self::PACKAGE_NAME);
-        } catch (Throwable) {
-            return null;
-        }
-
-        return is_string($version) && $version !== '' ? $version : null;
     }
 }
