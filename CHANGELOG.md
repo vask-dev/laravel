@@ -2,6 +2,19 @@
 
 All notable changes to `vask/laravel` will be documented in this file.
 
+## 0.0.15 - 2026-05-12
+
+### What's Changed
+
+Two CI follow-ups after `0.0.14`:
+
+* **`run-tests`** was failing on the `prefer-lowest` matrix entries. Composer was picking `orchestra/testbench-core v9.0.1` (the floor of `^9.0`), which references an undeclared `static \$latestResponse` in its `TestCase::setUp`, blowing up every test using the orchestra base class. Bumped the require-dev floor of `orchestra/testbench` from `^9.0` to `^9.5` so prefer-lowest lands on a release with the property declared. Production `require` constraints are untouched.
+  
+* **PHPStan** was failing because the default 128M PHP memory limit crashed its parallel worker partway through larastan's analysis, emitting a spurious "view-string" error. Added `--memory-limit=1G` to the workflow.
+  
+
+**Full Changelog**: https://github.com/vask-dev/laravel/compare/0.0.14...0.0.15
+
 ## 0.0.14 - 2026-05-12
 
 ### What's Changed
