@@ -2,6 +2,23 @@
 
 All notable changes to `vask/laravel` will be documented in this file.
 
+## 0.0.14 - 2026-05-12
+
+### What's Changed
+
+**Fix CI.** Two CI failures had been red on the README badge:
+
+* The `run-tests` matrix entry for PHP 8.1 + Laravel 10 + prefer-stable could no longer resolve composer dependencies (phpunit 10.5.63 conflicts with pest 2.x; pest 3+ needs PHP 8.2+). Since PHP 8.1 security support ended Dec 2024, dropping it from `composer.json` and the matrix is the cleanest fix.
+* PHPStan was failing because pint's `mb_str_functions` rule had converted `rtrim`/`trim`/`ltrim` to their `mb_*` PHP 8.4 counterparts. The runtime polyfill covers them, but its untyped bootstrap makes phpstan-on-PHP-8.3 see them as returning `mixed`, cascading into return-type errors. Reverted to plain `trim` and removed the pint rule.
+
+**Trim the outbound User-Agent.** Dropped the trailing `vask-laravel/{version}` tail. The UA is now just `{app-slug}/{env}`, e.g. `vask-web/local`.
+
+#### Breaking
+
+* Minimum PHP version is now **8.2** (was 8.1).
+
+**Full Changelog**: https://github.com/vask-dev/laravel/compare/0.0.13...0.0.14
+
 ## 0.0.13 - 2026-05-12
 
 ### What's Changed
