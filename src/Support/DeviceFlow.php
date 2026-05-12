@@ -18,8 +18,6 @@ class DeviceFlow
 
     public const GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
-    public const USER_AGENT = 'vask-dev/laravel';
-
     /** @var callable */
     protected $sleeper;
 
@@ -59,7 +57,7 @@ class DeviceFlow
 
         $response = Http::asForm()
             ->acceptJson()
-            ->withHeaders(['User-Agent' => self::USER_AGENT])
+            ->withHeaders(['User-Agent' => UserAgent::build()])
             ->post($this->baseUrl().'/oauth/device/code', $body);
 
         $response->throw();
@@ -101,7 +99,7 @@ class DeviceFlow
     {
         $response = Http::asForm()
             ->acceptJson()
-            ->withHeaders(['User-Agent' => self::USER_AGENT])
+            ->withHeaders(['User-Agent' => UserAgent::build()])
             ->post($this->baseUrl().'/oauth/token', [
                 'client_id' => self::CLIENT_ID,
                 'device_code' => $deviceCode,

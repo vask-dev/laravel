@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Http;
 use Vask\Laravel\Support\DeviceFlow;
 use Vask\Laravel\Support\DeviceFlowResult;
+use Vask\Laravel\Support\UserAgent;
 
 beforeEach(function (): void {
     $this->slept = [];
@@ -36,7 +37,7 @@ it('requests a device code and parses the response', function (): void {
     Http::assertSent(fn ($r): bool => str_ends_with((string) $r->url(), '/oauth/device/code')
         && $r['client_id'] === DeviceFlow::CLIENT_ID
         && ! isset($r->data()['device_name'])
-        && $r->header('User-Agent')[0] === DeviceFlow::USER_AGENT
+        && $r->header('User-Agent')[0] === UserAgent::build()
     );
 });
 
@@ -81,7 +82,7 @@ it('sends the package User-Agent on token polls too', function (): void {
 
     $this->flow->pollForToken('dev-abc');
 
-    Http::assertSent(fn ($r): bool => $r->header('User-Agent')[0] === DeviceFlow::USER_AGENT);
+    Http::assertSent(fn ($r): bool => $r->header('User-Agent')[0] === UserAgent::build());
 });
 
 it('returns SUCCESS when the token endpoint returns a token', function (): void {

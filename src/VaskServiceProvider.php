@@ -12,6 +12,7 @@ use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Vask\Laravel\Commands\DoctorCommand;
 use Vask\Laravel\Commands\InstallCommand;
 use Vask\Laravel\Http\Controllers\VaskDemoController;
+use Vask\Laravel\Support\UserAgent;
 
 class VaskServiceProvider extends PackageServiceProvider
 {
@@ -59,6 +60,30 @@ class VaskServiceProvider extends PackageServiceProvider
         return false;
     }
 
+    /**
+     * Plumb our User-Agent into the Pusher broadcaster's Guzzle client.
+     *
+     * Laravel's BroadcastManager forwards `broadcasting.connections.pusher
+     * .client_options` straight into Guzzle's constructor, so a header set
+     * here travels with every outbound HTTP API call that `broadcast()`
+     * triggers — making it easy to identify which Laravel app a request
+     * came from on the Vask side.
+     *
+     * Idempotent: if the host app already set its own User-Agent on the
+     * Pusher client_options, we leave it alone.
+     */
+    public static function applyUserAgentToPusherBroadcaster(): void
+    {
+        $key = 'broadcasting.connections.pusher.client_options.headers.User-Agent';
+
+        $existing = config($key);
+        if (is_string($existing) && $existing !== '') {
+            return;
+        }
+
+        config([$key => UserAgent::build()]);
+    }
+
     public function configurePackage(Package $package): void
     {
         /*
@@ -82,6 +107,8 @@ class VaskServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        self::applyUserAgentToPusherBroadcaster();
+
         // Defer route registration until every other service provider has
         // booted, so handlers registered in the user's AppServiceProvider
         // (which boots after this one) are visible when we decide whether
