@@ -25,4 +25,7 @@ jobs:
         uses: ramsey/composer-install@v3
 
       - name: Run PHPStan
-        run: ./vendor/bin/phpstan --error-format=github
+        # --memory-limit=1G because the default 128M crashes the parallel
+        # worker partway through larastan's checks, which emits spurious
+        # errors and exits non-zero.
+        run: ./vendor/bin/phpstan --error-format=github --memory-limit=1G
